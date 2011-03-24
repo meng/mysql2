@@ -8,12 +8,29 @@ module ActiveRecord
       config[:username] = 'root' if config[:username].nil?
 
       if Mysql2::Client.const_defined? :FOUND_ROWS
-        config[:flags] = Mysql2::Client::FOUND_ROWS
+        config[:flags] = config[:flags] ? config[:flags] | Mysql2::Client::FOUND_ROWS : Mysql2::Client::FOUND_ROWS
       end
 
       client = Mysql2::Client.new(config.symbolize_keys)
       options = [config[:host], config[:username], config[:password], config[:database], config[:port], config[:socket], 0]
       ConnectionAdapters::Mysql2Adapter.new(client, logger, options, config)
+    end
+
+    # This method is for running stored procedures.
+    #
+    # @param [String] the name of procedure
+    #   and arguments for procedure
+    # @return [Hash]
+    #
+    def self.procedure(name, *args)
+      connection = ActiveRecord::Base.connection
+      begin
+        arguments = args.map{ |v| connection.quote(v) }.join(',')
+        connection.select_one("CALL #{name}(#{arguments})")
+      rescue NoMethodError
+      ensure
+        connection.reconnect! unless connection.active?
+      end
     end
   end
 
